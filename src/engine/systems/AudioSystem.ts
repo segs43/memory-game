@@ -1,17 +1,24 @@
 export class AudioSystem {
   private ctx: AudioContext | null = null;
-  private ambientOscillators: OscillatorNode[] = [];
+  private masterGain: GainNode | null = null;
+  private ambientNodes: OscillatorNode[] = [];
   private ambientGain: GainNode | null = null;
   private ready = false;
 
   init(): void {
     try {
-      this.ctx = new (window.AudioContext || (window as typeof window & { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
+      const AudioCtx = window.AudioContext ?? (window as typeof window & { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      this.ctx = new AudioCtx();
+      this.masterGain = this.ctx.createGain();
+      this.masterGain.gain.setValueAtTime(0.8, this.ctx.currentTime);
+      this.masterGain.connect(this.ctx.destination);
+
       this.ambientGain = this.ctx.createGain();
-      this.ambientGain.gain.setValueAtTime(0.04, this.ctx.currentTime);
-      this.ambientGain.connect(this.ctx.destination);
+      this.ambientGain.gain.setValueAtTime(0.025, this.ctx.currentTime);
+      this.ambientGain.connect(this.masterGain);
+
       this.ready = true;
-      this.startAmbient();
+      this.buildAmbient();
     } catch {
       this.ready = false;
     }
@@ -21,66 +28,121 @@ export class AudioSystem {
     if (this.ctx?.state === 'suspended') this.ctx.resume();
   }
 
-  private startAmbient(): void {
+  // ── Ambient drone ──────────────────────────────────────────────────────────
+
+  private buildAmbient(): void {
     if (!this.ctx || !this.ambientGain) return;
-    const freqs = [55, 110, 165];
-    freqs.forEach(freq => {
-      const osc = this.ctx!.createOscillator();
-      osc.type = 'sine';
-      osc.frequency.value = freq;
+    // Four-voice drone: root + fifth + octave + slight dissonance
+    const freqs = [55, 82.5, 110, 111.5];
+    freqs.forEach((freq, i) => {
+      const osc  = this.ctx!.createOscillator();
+      const lfo  = this.ctx!.createOscillator();
+      const lfoG = this.ctx!.createGain();
+
+      osc.type      = i % 2 === 0 ? 'sine' : 'triangle';
+      osc.frequency.setValueAtTime(freq, this.ctx!.currentTime);
+
+      // Slow tremolo via LFO
+      lfo.frequency.setValueAtTime(0.08 + i * 0.05, this.ctx!.currentTime);
+      lfoG.gain.setValueAtTime(3, this.ctx!.currentTime);
+      lfo.connect(lfoG);
+      lfoG.connect(osc.frequency);
+
       osc.connect(this.ambientGain!);
+      lfo.start();
       osc.start();
-      this.ambientOscillators.push(osc);
+      this.ambientNodes.push(osc);
     });
   }
 
   setCorruptionLevel(level: number): void {
     if (!this.ctx || !this.ambientGain) return;
-    // More distortion as corruption rises
-    const vol = 0.02 + level * 0.06;
-    this.ambientGain.gain.linearRampToValueAtTime(vol, this.ctx.currentTime + 0.5);
-    // Detune oscillators for eerie effect
-    this.ambientOscillators.forEach((osc, i) => {
-      osc.detune.linearRampToValueAtTime(level * (i + 1) * 30, this.ctx!.currentTime + 0.5);
+    const now = this.ctx.currentTime;
+    // Volume swells with corruption
+    this.ambientGain.gain.linearRampToValueAtTime(0.025 + level * 0.07, now + 0.8);
+    // Detune drifts — each voice gets progressively more unstable
+    this.ambientNodes.forEach((osc, i) => {
+      const drift = level * (i + 1) * 18 * Math.sin(now * 0.1 + i);
+      osc.detune.linearRampToValueAtTime(drift, now + 1.2);
     });
   }
 
+  // ── Sound effects ──────────────────────────────────────────────────────────
+
   playGlitch(): void {
-    if (!this.ctx || !this.ready) return;
+    if (!this.ready || !this.ctx || !this.masterGain) return;
     this.resume();
-    const osc = this.ctx.createOscillator();
+    const now = this.ctx.currentTime;
+
+    const osc  = this.ctx.createOscillator();
     const gain = this.ctx.createGain();
-    osc.type = 'square';
-    osc.frequency.value = 200 + Math.random() * 600;
-    gain.gain.setValueAtTime(0.12, this.ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.2);
-    osc.connect(gain).connect(this.ctx.destination);
-    osc.start();
-    osc.stop(this.ctx.currentTime + 0.2);
+    const dist = this.ctx.createWaveShaper();
+
+    // Harsh distortion curve
+    const curve = new Float32Array(256);
+    for (let i = 0; i < 256; i++) {
+      const x = (i * 2) / 256 - 1;
+      curve[i] = (Math.PI + 300) * x / (Math.PI + 300 * Math.abs(x));
+    }
+    dist.curve = curve;
+
+    osc.type            = 'sawtooth';
+    osc.frequency.value = 180 + Math.random() * 500;
+    osc.frequency.exponentialRampToValueAtTime(80 + Math.random() * 200, now + 0.12);
+
+    gain.gain.setValueAtTime(0.18, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
+
+    osc.connect(dist).connect(gain).connect(this.masterGain);
+    osc.start(now);
+    osc.stop(now + 0.2);
   }
 
   playMemorySteal(): void {
-    if (!this.ctx || !this.ready) return;
+    if (!this.ready || !this.ctx || !this.masterGain) return;
     this.resume();
     const now = this.ctx.currentTime;
-    const freqs = [880, 660, 440, 220];
+
+    // Descending horror sting
+    const freqs = [1200, 900, 600, 350, 180];
     freqs.forEach((freq, i) => {
-      const osc = this.ctx!.createOscillator();
+      const osc  = this.ctx!.createOscillator();
       const gain = this.ctx!.createGain();
-      osc.type = 'sawtooth';
+      const t    = now + i * 0.07;
+
+      osc.type            = i < 2 ? 'square' : 'sawtooth';
       osc.frequency.value = freq;
-      gain.gain.setValueAtTime(0, now + i * 0.06);
-      gain.gain.linearRampToValueAtTime(0.08, now + i * 0.06 + 0.02);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.06 + 0.25);
-      osc.connect(gain).connect(this.ctx!.destination);
-      osc.start(now + i * 0.06);
-      osc.stop(now + i * 0.06 + 0.3);
+      osc.frequency.exponentialRampToValueAtTime(freq * 0.4, t + 0.3);
+
+      gain.gain.setValueAtTime(0, t);
+      gain.gain.linearRampToValueAtTime(0.09, t + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.35);
+
+      osc.connect(gain).connect(this.masterGain!);
+      osc.start(t);
+      osc.stop(t + 0.4);
     });
+
+    // Low impact thud
+    const noise  = this.ctx.createOscillator();
+    const nGain  = this.ctx.createGain();
+    noise.type            = 'sine';
+    noise.frequency.value = 60;
+    noise.frequency.exponentialRampToValueAtTime(20, now + 0.3);
+    nGain.gain.setValueAtTime(0.25, now);
+    nGain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+    noise.connect(nGain).connect(this.masterGain);
+    noise.start(now);
+    noise.stop(now + 0.4);
   }
 
   destroy(): void {
-    this.ambientOscillators.forEach(o => { try { o.stop(); } catch { /* already stopped */ } });
-    this.ambientOscillators = [];
+    this.ambientNodes.forEach(o => { try { o.stop(); } catch { /* already stopped */ } });
+    this.ambientNodes = [];
     this.ctx?.close();
+    this.ctx        = null;
+    this.masterGain = null;
+    this.ambientGain = null;
+    this.ready      = false;
   }
 }

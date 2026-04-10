@@ -247,6 +247,7 @@ export class GameController {
         this.camera,
         this.canvas.width,
         this.canvas.height,
+        this.elapsed,
       );
     }
   }
