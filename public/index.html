@@ -1,0 +1,1161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <title>🧠 Memory Thief</title>
+  <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@700;900&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-tap-highlight-color: transparent; }
+
+    :root {
+      --bg: #07040f;
+      --purple-deep: #0f0b1a;
+      --purple-mid: #2a1540;
+      --purple-border: #5a3d8c;
+      --purple-bright: #9b6fd1;
+      --purple-glow: #b77aff;
+      --purple-light: #d4b5ff;
+      --white: #f5edff;
+      --mono: 'Share Tech Mono', monospace;
+      --display: 'Orbitron', monospace;
+    }
+
+    html, body { width: 100%; height: 100%; overflow: hidden; background: var(--bg); font-family: var(--mono); }
+
+    #app { position: fixed; inset: 0; }
+
+    /* ── CANVAS ── */
+    #gc { position: absolute; inset: 0; display: block; width: 100%; height: 100%; touch-action: none; }
+    #overlay { position: absolute; inset: 0; pointer-events: none; }
+
+    /* ── SCREENS ── */
+    .screen {
+      position: absolute; inset: 0;
+      display: flex; align-items: center; justify-content: center;
+      background: radial-gradient(ellipse at center, #130c1f 0%, #07040f 100%);
+      z-index: 50; padding: 20px;
+      animation: fadeIn .35s ease;
+    }
+    .screen.hidden { display: none; }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+    .card {
+      background: #0d0818ee;
+      border: 2px solid var(--purple-border);
+      box-shadow: 0 0 80px #3a256655, inset 0 0 40px #0d0520;
+      border-radius: 24px;
+      padding: 40px 30px;
+      max-width: 480px;
+      width: 100%;
+      text-align: center;
+      backdrop-filter: blur(12px);
+    }
+
+    .byline { font-size: .7rem; letter-spacing: 4px; color: #5a4070; text-transform: uppercase; margin-bottom: 18px; }
+    .byline span { color: #9a70c0; }
+
+    /* ── GLITCH TITLE ── */
+    .title {
+      font-family: var(--display);
+      font-size: clamp(2rem, 9vw, 3.6rem);
+      font-weight: 900;
+      letter-spacing: 6px;
+      color: var(--purple-light);
+      text-shadow: 3px 0 #6a1f9a, -3px 0 #0055ff, 0 0 50px #b77aff66;
+      line-height: 1.05;
+      margin-bottom: 10px;
+      position: relative;
+      animation: titlePulse 3s ease-in-out infinite;
+    }
+    @keyframes titlePulse {
+      0%,100% { text-shadow: 3px 0 #6a1f9a, -3px 0 #0055ff, 0 0 40px #b77aff66; }
+      50%      { text-shadow: 5px 0 #9a2fd9, -5px 0 #0099ff, 0 0 70px #d4b5ffaa; }
+    }
+    .title::before {
+      content: attr(data-t);
+      position: absolute; inset: 0;
+      color: #ff00cc; opacity: 0;
+      clip-path: polygon(0 15%, 100% 15%, 100% 35%, 0 35%);
+      animation: gA 5s infinite;
+    }
+    .title::after {
+      content: attr(data-t);
+      position: absolute; inset: 0;
+      color: #00ffee; opacity: 0;
+      clip-path: polygon(0 60%, 100% 60%, 100% 80%, 0 80%);
+      animation: gB 5s infinite;
+    }
+    @keyframes gA { 0%,88%,100%{opacity:0;transform:none} 90%{opacity:.7;transform:translateX(-5px)} 92%{opacity:0} 94%{opacity:.5;transform:translateX(5px)} 96%{opacity:0} }
+    @keyframes gB { 0%,89%,100%{opacity:0;transform:none} 91%{opacity:.6;transform:translateX(5px)} 93%{opacity:0} 95%{opacity:.4;transform:translateX(-3px)} 97%{opacity:0} }
+
+    .tagline { font-size: .95rem; color: #7a5a9a; margin: 8px 0 28px; line-height: 1.7; letter-spacing: 1px; }
+
+    .btn {
+      display: block; width: 100%;
+      background: #1a1030;
+      border: 2px solid #8b6bae;
+      color: var(--white);
+      font-family: var(--display);
+      font-size: 1rem;
+      font-weight: 700;
+      letter-spacing: 5px;
+      text-transform: uppercase;
+      padding: 16px 30px;
+      border-radius: 50px;
+      cursor: pointer;
+      margin: 6px 0;
+      box-shadow: 0 5px 0 #110922, 0 0 25px #7a4fa044;
+      transition: background .15s, box-shadow .1s, transform .08s;
+    }
+    .btn:hover  { background: #261644; box-shadow: 0 5px 0 #110922, 0 0 50px #9b6fd1; }
+    .btn:active { transform: translateY(4px); box-shadow: 0 1px 0 #110922, 0 0 50px #d4b5ff; }
+
+    .hints { font-size: .72rem; color: #4a3360; letter-spacing: 1px; line-height: 2; margin-top: 10px; }
+
+    /* ── HUD ── */
+    #hud {
+      position: absolute; top: 14px; left: 14px; right: 14px;
+      display: flex; justify-content: space-between; align-items: center;
+      pointer-events: none; z-index: 20;
+    }
+    .hpi {
+      font-family: var(--display);
+      font-size: .78rem; letter-spacing: 2px;
+      background: #0d071888;
+      border: 1px solid #5a3d8c88;
+      border-radius: 40px;
+      padding: 8px 16px;
+      color: var(--purple-light);
+      backdrop-filter: blur(8px);
+      box-shadow: 0 3px 0 #1a0d2a;
+      transition: color .4s, border-color .4s;
+    }
+    .hpi.t1 { color: #ffdd88; border-color: #aa880088; }
+    .hpi.t2 { color: #ff9944; border-color: #cc550088; }
+    .hpi.t3 { color: #ff4466; border-color: #aa003388; animation: hudPulse 1s infinite; }
+    .hpi.t4 { color: #ff0033; border-color: #ff003388; animation: hudPulse .4s infinite; }
+    @keyframes hudPulse { 0%,100%{box-shadow:0 3px 0 #1a0d2a,0 0 10px currentColor} 50%{box-shadow:0 3px 0 #1a0d2a,0 0 35px currentColor} }
+
+    /* ── DIALOGUE ── */
+    #dlg {
+      position: absolute;
+      bottom: 150px; left: 16px; right: 16px;
+      background: #080410f0;
+      border: 2px solid var(--purple-bright);
+      border-radius: 18px;
+      padding: 20px 22px 16px;
+      backdrop-filter: blur(16px);
+      box-shadow: 0 6px 0 #2d1a42, 0 0 60px #00000099;
+      z-index: 30; text-align: center;
+      animation: dlgPop .2s cubic-bezier(.34,1.56,.64,1);
+    }
+    #dlg.hidden { display: none; }
+    @keyframes dlgPop { from{transform:translateY(8px) scale(.97);opacity:0} to{transform:none;opacity:1} }
+    #dlg-text { font-size: clamp(.95rem,3vw,1.2rem); color: #f0e4ff; line-height: 1.65; min-height: 2.5em; }
+    #dlg-hint { font-size: .75rem; color: #7060a0; margin-top: 12px; letter-spacing: 1px; animation: blink 1.4s infinite; }
+    @keyframes blink { 0%,100%{opacity:.8} 50%{opacity:.2} }
+
+    /* ── NEAR HINT ── */
+    #near-hint {
+      position: absolute; top: 50%; left: 50%;
+      transform: translate(-50%,-115px);
+      font-family: var(--display); font-size: .72rem; letter-spacing: 3px;
+      color: var(--purple-light); text-shadow: 0 0 20px var(--purple-glow);
+      pointer-events: none; z-index: 25;
+      animation: float 1.6s ease-in-out infinite;
+    }
+    #near-hint.hidden { display: none; }
+    @keyframes float { 0%,100%{transform:translate(-50%,-115px)} 50%{transform:translate(-50%,-125px)} }
+
+    /* ── ENDING ── */
+    #ending-title { font-family: var(--display); font-size: clamp(1.3rem,5vw,2rem); font-weight: 900; letter-spacing: 3px; color: var(--purple-light); text-shadow: 0 0 40px var(--purple-glow); margin-bottom: 14px; }
+    #ending-desc  { font-size: .95rem; color: #c0a8e8; line-height: 1.75; white-space: pre-line; margin-bottom: 18px; }
+    #ending-stats { font-size: .82rem; color: #6a5088; letter-spacing: 1px; line-height: 2; margin-bottom: 22px; }
+
+    /* ── MOBILE CONTROLS ── */
+    #mobile-ctrl {
+      position: absolute; bottom: 18px; left: 0; right: 0;
+      display: flex; justify-content: space-between; align-items: flex-end;
+      padding: 0 22px; z-index: 40; pointer-events: none;
+    }
+    .dpad { position: relative; width: 150px; height: 150px; pointer-events: auto; }
+    .dp-btn {
+      position: absolute;
+      width: 56px; height: 56px;
+      background: #12093088;
+      border: 2px solid #6a409088;
+      border-radius: 14px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.5rem; color: var(--purple-light);
+      backdrop-filter: blur(8px);
+      box-shadow: 0 4px 0 #1a0d2a88;
+      cursor: pointer; touch-action: none;
+      transition: background .08s, transform .08s;
+    }
+    .dp-btn:active, .dp-btn.pressed { background: #2a1a4888; transform: scale(.93); }
+    .dp-up    { top: 0;   left: 50%; transform: translateX(-50%); }
+    .dp-up:active, .dp-up.pressed { transform: translateX(-50%) scale(.93); }
+    .dp-down  { bottom: 0; left: 50%; transform: translateX(-50%); }
+    .dp-down:active, .dp-down.pressed { transform: translateX(-50%) scale(.93); }
+    .dp-left  { left: 0;  top: 50%; transform: translateY(-50%); }
+    .dp-left:active, .dp-left.pressed { transform: translateY(-50%) scale(.93); }
+    .dp-right { right: 0; top: 50%; transform: translateY(-50%); }
+    .dp-right:active, .dp-right.pressed { transform: translateY(-50%) scale(.93); }
+
+    .steal-btn {
+      width: 86px; height: 86px;
+      background: #2a154088;
+      border: 2px solid var(--purple-glow);
+      border-radius: 22px;
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+      color: var(--white); cursor: pointer; touch-action: none; pointer-events: auto;
+      box-shadow: 0 5px 0 #1a0d2a, 0 0 25px #9b6fd144;
+      transition: transform .08s, box-shadow .08s;
+    }
+    .steal-btn:active { transform: translateY(4px); box-shadow: 0 1px 0 #1a0d2a, 0 0 45px var(--purple-light); }
+    .steal-btn .si { font-size: 1.7rem; }
+    .steal-btn .sl { font-family: var(--display); font-size: .5rem; letter-spacing: 2px; color: var(--purple-light); }
+
+    /* ── POST-FX OVERLAY ── */
+    #pfx { position: absolute; inset: 0; pointer-events: none; z-index: 15; }
+
+    @media (max-width: 480px) {
+      .card { padding: 28px 16px; }
+      #dlg  { bottom: 160px; }
+    }
+  </style>
+</head>
+<body>
+<div id="app">
+  <canvas id="gc"></canvas>
+  <canvas id="pfx"></canvas>
+
+  <!-- MAIN MENU -->
+  <div class="screen" id="screen-menu">
+    <div class="card">
+      <div class="byline">made by <span>TawsiN</span></div>
+      <h1 class="title" data-t="MEMORY THIEF">MEMORY<br>THIEF</h1>
+      <p class="tagline">Every stolen memory steals a piece of you</p>
+      <button class="btn" id="btn-start">▶ START</button>
+      <div class="hints">
+        WASD / Arrow Keys · move<br>
+        E / Space · steal memory<br>
+        ⚠ find the hidden NPC for the true ending
+      </div>
+    </div>
+  </div>
+
+  <!-- HUD -->
+  <div id="hud" style="display:none">
+    <div class="hpi" id="h-mem">🧠 0</div>
+    <div class="hpi" id="h-cor">⚡ STABLE</div>
+  </div>
+
+  <!-- DIALOGUE -->
+  <div id="dlg" class="hidden">
+    <div id="dlg-text"></div>
+    <div id="dlg-hint">👇 tap / press E to continue</div>
+  </div>
+
+  <!-- NEAR HINT -->
+  <div id="near-hint" class="hidden">STEAL MEMORY</div>
+
+  <!-- MOBILE CONTROLS -->
+  <div id="mobile-ctrl" style="display:none">
+    <div class="dpad">
+      <div class="dp-btn dp-up"    data-k="up">↑</div>
+      <div class="dp-btn dp-left"  data-k="left">←</div>
+      <div class="dp-btn dp-down"  data-k="down">↓</div>
+      <div class="dp-btn dp-right" data-k="right">→</div>
+    </div>
+    <div class="steal-btn" id="btn-steal">
+      <span class="si">🧠</span>
+      <span class="sl">STEAL</span>
+    </div>
+  </div>
+
+  <!-- ENDING -->
+  <div class="screen hidden" id="screen-end">
+    <div class="card">
+      <div class="byline">made by <span>TawsiN</span></div>
+      <h2 id="ending-title">ENDING</h2>
+      <p  id="ending-desc">...</p>
+      <div id="ending-stats"></div>
+      <button class="btn" id="btn-restart">↻ PLAY AGAIN</button>
+    </div>
+  </div>
+</div>
+
+<script>
+'use strict';
+(() => {
+
+// ═══════════════════════════════════════════════
+// CONFIG — all tunables in one place
+// ═══════════════════════════════════════════════
+const CFG = {
+  W: 800, H: 600,
+  PLAYER_SPEED: 165,   // px/s
+  PLAYER_R: 14,
+  INTERACT_R: 50,
+  MAX_MEMORIES: 6,
+  TRUE_ENDING_COUNT: 5,
+  INVERT_MS: 4000,
+  CAM_LERP: 0.09,
+  SHAKE_DECAY: 0.91,
+};
+
+// ═══════════════════════════════════════════════
+// WORLD DATA — add NPCs / walls here only
+// ═══════════════════════════════════════════════
+const WALLS = [
+  {x:0,   y:0,   w:800, h:20 },
+  {x:0,   y:580, w:800, h:20 },
+  {x:0,   y:0,   w:20,  h:600},
+  {x:780, y:0,   w:20,  h:600},
+  {x:200, y:100, w:20,  h:160},
+  {x:200, y:330, w:20,  h:100},
+  {x:550, y:190, w:160, h:20 },
+  {x:350, y:370, w:20,  h:160},
+  {x:100, y:440, w:140, h:20 },
+  {x:600, y:390, w:20,  h:140},
+  {x:420, y:100, w:20,  h:120},
+  {x:650, y:300, w:100, h:20 },
+  {x:100, y:280, w:80,  h:20 },
+];
+
+const NPC_DEFS = [
+  {
+    id:'npc0', x:120, y:120, color:'#c9a0ff',
+    memory:"🌙 A child's laughter... was it mine?",
+    corrupt:"🌙 A ch██d's la█ghter... was ██ m██e?",
+    patrol:[{x:120,y:120},{x:170,y:140},{x:140,y:80}],
+    speed:38, fleeR:80,
+  },
+  {
+    id:'npc1', x:660, y:140, color:'#ffe080',
+    memory:"🗝️ A key. A basement. Something buried deep.",
+    corrupt:"🗝️ A k██. A ██sement. Some████g ██ried.",
+    patrol:[{x:660,y:140},{x:700,y:160},{x:680,y:100}],
+    speed:42, fleeR:90,
+  },
+  {
+    id:'npc2', x:340, y:310, color:'#80ffcc',
+    memory:"💉 They called me 'doctor'... but I remember pain.",
+    corrupt:"💉 They cal██d me '██c██r'... bu█ I rem███ber p█in.",
+    patrol:[], speed:30, fleeR:70,
+  },
+  {
+    id:'npc3', x:690, y:480, color:'#ff80b0',
+    memory:"💔 You erased her... why? WHY?",
+    corrupt:"💔 You era██d ██r... wh█? W██?",
+    patrol:[{x:690,y:480},{x:640,y:510},{x:720,y:520}],
+    speed:35, fleeR:60,
+  },
+  {
+    id:'npc4', x:140, y:520, color:'#00ccff',
+    memory:"🪞 The last memory: you standing over yourself.",
+    corrupt:"🪞 The la██ mem███y: ██u ███nding ov██ ██ur██lf.",
+    patrol:[], speed:25, fleeR:100,
+  },
+  {
+    id:'npc5', x:750, y:300, color:'#ff4444', // hidden NPC
+    memory:"⚠️ There is no truth — only what you choose to steal.",
+    corrupt:"⚠️ T████ is no t████ — ██ly ████ you ██████ to s████.",
+    patrol:[{x:750,y:300},{x:760,y:340},{x:730,y:270}],
+    speed:55, fleeR:120,
+  },
+];
+
+const ENDINGS = {
+  dark: {
+    title:'🌑 DARK ENDING',
+    desc:'Six memories consumed.\nThe void has taken everything you were.\nYou no longer remember your own name.',
+  },
+  incomplete: {
+    title:'📖 INCOMPLETE TRUTH',
+    desc:'Fragments remain buried.\nYou walked away before the picture was whole.\nThe memories rot without a host.',
+  },
+  true: {
+    title:'🔮 TRUE ENDING — THE THIEF REMEMBERS',
+    desc:'You stole exactly 5 memories — enough to see the truth\nwithout being consumed by it.\nThe mirror NPC was you all along.',
+  },
+};
+
+// ═══════════════════════════════════════════════
+// ENGINE STATE
+// ═══════════════════════════════════════════════
+let phase = 'menu'; // menu | playing | dialogue | ending
+let stolen = 0;
+let invertUntil = 0;
+let sessionStart = 0;
+let nearbyId = null;
+let raf = null;
+let lastTime = null;
+
+// Camera
+const cam = { x:400, y:300, sx:0, sy:0, shake:0 };
+
+// Effects
+const fx = {
+  vigR: 280,
+  chromatic: 0, chromaticTimer: 0,
+  scanlines: 0.08,
+  glitchActive: false, glitchTimer: 0,
+  glitchInterval: 0,
+};
+
+// Input
+const keys = { up:false, down:false, left:false, right:false };
+
+// Entities
+let player;
+let npcs;
+
+// Audio
+let audioCtx = null;
+
+// Timing
+let elapsed = 0;
+
+// ═══════════════════════════════════════════════
+// CANVAS SETUP
+// ═══════════════════════════════════════════════
+const gc  = document.getElementById('gc');
+const ctx = gc.getContext('2d');
+const pfx = document.getElementById('pfx');
+const pfxCtx = pfx.getContext('2d');
+
+function resizeCanvases() {
+  const dpr = window.devicePixelRatio || 1;
+  const W = window.innerWidth, H = window.innerHeight;
+  for (const c of [gc, pfx]) {
+    c.width  = W * dpr;
+    c.height = H * dpr;
+    c.style.width  = W + 'px';
+    c.style.height = H + 'px';
+  }
+  ctx.scale(dpr, dpr);
+  pfxCtx.scale(dpr, dpr);
+}
+resizeCanvases();
+window.addEventListener('resize', resizeCanvases);
+
+// ═══════════════════════════════════════════════
+// ENTITY FACTORY
+// ═══════════════════════════════════════════════
+function makePlayer() {
+  return { x:400, y:300, r:CFG.PLAYER_R };
+}
+
+function makeNpcs() {
+  return NPC_DEFS.map(d => ({
+    id: d.id,
+    x: d.spawnX ?? d.x,
+    y: d.spawnY ?? d.y,
+    r: 16,
+    color: d.color,
+    memory: d.memory,
+    corrupt: d.corrupt,
+    patrol: d.patrol.map(p => ({...p})),
+    patrolIdx: 0,
+    speed: d.speed,
+    fleeR: d.fleeR,
+    stolen: false,
+    wanderTarget: null,
+    idleTimer: Math.random() * 2,
+    aiState: 'idle',
+  }));
+}
+
+// ═══════════════════════════════════════════════
+// COLLISION — circle vs AABB MTV
+// ═══════════════════════════════════════════════
+function resolveCircleWall(cx, cy, cr, wx, wy, ww, wh) {
+  const nx = Math.max(wx, Math.min(cx, wx + ww));
+  const ny = Math.max(wy, Math.min(cy, wy + wh));
+  const dx = cx - nx, dy = cy - ny;
+  const dist2 = dx*dx + dy*dy;
+  if (dist2 >= cr*cr) return null;
+  const dist = Math.sqrt(dist2) || .001;
+  const overlap = cr - dist + .5;
+  return { px: dx/dist*overlap, py: dy/dist*overlap };
+}
+
+function moveEntity(e, dx, dy) {
+  e.x = Math.max(20+e.r, Math.min(CFG.W-20-e.r, e.x + dx));
+  e.y = Math.max(20+e.r, Math.min(CFG.H-20-e.r, e.y + dy));
+  for (let pass = 0; pass < 2; pass++) {
+    for (const w of WALLS) {
+      const r = resolveCircleWall(e.x, e.y, e.r, w.x, w.y, w.w, w.h);
+      if (r) { e.x += r.px; e.y += r.py; }
+    }
+  }
+}
+
+function dist(ax, ay, bx, by) {
+  const dx=ax-bx, dy=ay-by;
+  return Math.sqrt(dx*dx+dy*dy);
+}
+
+// ═══════════════════════════════════════════════
+// AI
+// ═══════════════════════════════════════════════
+function updateAI(dt) {
+  for (const n of npcs) {
+    if (n.stolen) continue;
+    const dp = dist(n.x, n.y, player.x, player.y);
+
+    if (dp < n.fleeR) {
+      // Flee
+      const dx = n.x - player.x, dy = n.y - player.y;
+      const len = Math.sqrt(dx*dx+dy*dy) || 1;
+      moveEntity(n, dx/len*n.speed*1.8*dt, dy/len*n.speed*1.8*dt);
+      n.aiState = 'flee';
+    } else if (n.patrol.length >= 2) {
+      // Patrol
+      const t = n.patrol[n.patrolIdx % n.patrol.length];
+      const dx = t.x - n.x, dy = t.y - n.y;
+      const d = Math.sqrt(dx*dx+dy*dy);
+      if (d < 6) { n.patrolIdx = (n.patrolIdx+1) % n.patrol.length; }
+      else { moveEntity(n, dx/d*n.speed*dt, dy/d*n.speed*dt); }
+      n.aiState = 'patrol';
+    } else {
+      // Wander
+      n.idleTimer -= dt;
+      if (!n.wanderTarget || n.idleTimer <= 0) {
+        n.wanderTarget = {
+          x: 30 + Math.random() * (CFG.W-60),
+          y: 30 + Math.random() * (CFG.H-60),
+        };
+        n.idleTimer = 1.5 + Math.random() * 2.5;
+      }
+      const dx = n.wanderTarget.x - n.x, dy = n.wanderTarget.y - n.y;
+      const d = Math.sqrt(dx*dx+dy*dy);
+      if (d < 8) { n.wanderTarget = null; }
+      else { moveEntity(n, dx/d*n.speed*.6*dt, dy/d*n.speed*.6*dt); }
+      n.aiState = 'idle';
+    }
+  }
+
+  // Separate overlapping NPCs
+  for (let i = 0; i < npcs.length; i++) {
+    for (let j = i+1; j < npcs.length; j++) {
+      const a = npcs[i], b = npcs[j];
+      const dx = b.x-a.x, dy = b.y-a.y;
+      const d = Math.sqrt(dx*dx+dy*dy) || .001;
+      const min = a.r + b.r + 2;
+      if (d < min) {
+        const ov = (min-d)/2;
+        a.x -= dx/d*ov; a.y -= dy/d*ov;
+        b.x += dx/d*ov; b.y += dy/d*ov;
+      }
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════
+// CORRUPTION TIERS
+// ═══════════════════════════════════════════════
+const TIERS = [
+  { min:0, label:'⚡ STABLE',      cls:'',   vigR:280, chromatic:.00, scan:.08, glitchP:.00 },
+  { min:1, label:'⚠️ COMPROMISED', cls:'t1', vigR:240, chromatic:.02, scan:.18, glitchP:.05 },
+  { min:3, label:'🌀 UNSTABLE',    cls:'t2', vigR:190, chromatic:.05, scan:.38, glitchP:.15 },
+  { min:5, label:'💀 SEVERE',      cls:'t3', vigR:140, chromatic:.09, scan:.60, glitchP:.28 },
+  { min:6, label:'☠️ TERMINAL',    cls:'t4', vigR:90,  chromatic:.14, scan:.85, glitchP:.50 },
+];
+
+function getTier() {
+  let t = TIERS[0];
+  for (const tier of TIERS) { if (stolen >= tier.min) t = tier; }
+  return t;
+}
+
+function applyTierEffects() {
+  const t = getTier();
+  fx.vigR = t.vigR;
+  fx.chromatic = t.chromatic;
+  fx.chromaticTimer = 2.5;
+  fx.scanlines = t.scan;
+  fx.glitchActive = true;
+  fx.glitchTimer = .35;
+  cam.shake = 4 + stolen * 1.8;
+  updateHUD();
+}
+
+// ═══════════════════════════════════════════════
+// HUD
+// ═══════════════════════════════════════════════
+function updateHUD() {
+  const t = getTier();
+  document.getElementById('h-mem').textContent = '🧠 ' + stolen;
+  const hc = document.getElementById('h-cor');
+  hc.textContent = t.label;
+  hc.className = 'hpi ' + t.cls;
+}
+
+// ═══════════════════════════════════════════════
+// INTERACTION
+// ═══════════════════════════════════════════════
+function findNearest() {
+  let best = null, bestD = CFG.INTERACT_R;
+  for (const n of npcs) {
+    if (n.stolen) continue;
+    const d = dist(player.x, player.y, n.x, n.y);
+    if (d < bestD) { bestD = d; best = n; }
+  }
+  return best;
+}
+
+function trySteal() {
+  if (phase === 'dialogue') { closeDlg(); return; }
+  if (phase !== 'playing') return;
+  const n = findNearest();
+  if (!n) return;
+  stealMemory(n);
+}
+
+function stealMemory(n) {
+  n.stolen = true;
+  stolen++;
+  playSteal();
+  triggerGlitch();
+
+  // Particle burst (drawn next frame)
+  spawnParticles(n.x, n.y, 22, n.color);
+
+  // Invert controls briefly
+  invertUntil = Date.now() + CFG.INVERT_MS;
+
+  // Corrupted text based on count
+  const text = stolen >= 2
+    ? corruptText(n.corrupt, stolen)
+    : n.memory;
+
+  showDlg(text);
+  applyTierEffects();
+  checkEnding();
+}
+
+function corruptText(base, count) {
+  const GLITCH = ['█','▓','▒','░','▀','▄','■','◼'];
+  const rate = Math.min(.45, (count-1)*.08);
+  return [...base].map(c => {
+    if (c===' '||c==='\n') return c;
+    if (Math.random() < rate) return GLITCH[Math.floor(Math.random()*GLITCH.length)];
+    return c;
+  }).join('');
+}
+
+// ═══════════════════════════════════════════════
+// DIALOGUE
+// ═══════════════════════════════════════════════
+function showDlg(text) {
+  phase = 'dialogue';
+  document.getElementById('dlg-text').textContent = text;
+  document.getElementById('dlg').classList.remove('hidden');
+}
+
+function closeDlg() {
+  document.getElementById('dlg').classList.add('hidden');
+  phase = 'playing';
+  // Check if all stolen → incomplete ending
+  const allStolen = npcs.every(n => n.stolen);
+  if (allStolen && stolen < CFG.MAX_MEMORIES) triggerEnding('incomplete');
+}
+
+// ═══════════════════════════════════════════════
+// ENDINGS
+// ═══════════════════════════════════════════════
+function checkEnding() {
+  // Dark — too many
+  if (stolen >= CFG.MAX_MEMORIES) {
+    setTimeout(() => triggerEnding('dark'), 1400);
+    return;
+  }
+  // True — exactly 5 including hidden NPC (npc5)
+  const hiddenStolen = npcs.find(n => n.id === 'npc5')?.stolen;
+  if (stolen === CFG.TRUE_ENDING_COUNT && hiddenStolen) {
+    setTimeout(() => triggerEnding('true'), 1400);
+  }
+}
+
+function triggerEnding(type) {
+  phase = 'ending';
+  const e = ENDINGS[type];
+  const secs = Math.floor((Date.now() - sessionStart) / 1000);
+  document.getElementById('ending-title').textContent = e.title;
+  document.getElementById('ending-desc').textContent  = e.desc;
+  document.getElementById('ending-stats').innerHTML   =
+    `🧠 memories stolen: ${stolen}<br>⏱ survived: ${secs}s`;
+  document.getElementById('hud').style.display = 'none';
+  document.getElementById('mobile-ctrl').style.display = 'none';
+  document.getElementById('dlg').classList.add('hidden');
+  document.getElementById('near-hint').classList.add('hidden');
+  document.getElementById('screen-end').classList.remove('hidden');
+  cancelAnimationFrame(raf);
+}
+
+// ═══════════════════════════════════════════════
+// PARTICLES
+// ═══════════════════════════════════════════════
+const particles = [];
+const POOL = Array.from({length:256}, () => ({ active:false, x:0,y:0,vx:0,vy:0,life:0,maxLife:1,color:'#fff',size:3 }));
+
+function spawnParticles(x, y, count, color) {
+  let n = 0;
+  for (const p of POOL) {
+    if (!p.active && n < count) {
+      const a = Math.random()*Math.PI*2;
+      const s = 60 + Math.random()*120;
+      p.active=true; p.x=x; p.y=y;
+      p.vx=Math.cos(a)*s; p.vy=Math.sin(a)*s;
+      p.life = p.maxLife = .5+Math.random()*.5;
+      p.color=color; p.size=2+Math.random()*4;
+      n++;
+    }
+  }
+}
+
+function updateParticles(dt) {
+  for (const p of POOL) {
+    if (!p.active) continue;
+    p.x += p.vx*dt; p.y += p.vy*dt;
+    p.vx *= .94; p.vy *= .94;
+    p.life -= dt;
+    if (p.life <= 0) p.active = false;
+  }
+}
+
+// ═══════════════════════════════════════════════
+// AUDIO — 100% procedural Web Audio
+// ═══════════════════════════════════════════════
+function unlockAudio() {
+  if (audioCtx) return;
+  try {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    startAmbient();
+  } catch(e) {}
+}
+
+let ambientNodes = [];
+function startAmbient() {
+  if (!audioCtx) return;
+  stopAmbient();
+  const base = 55 + stolen * 4;
+  for (const freq of [base, base*1.001, base*.502]) {
+    const o = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    o.type = 'sine'; o.frequency.value = freq;
+    g.gain.value = .025;
+    o.connect(g).connect(audioCtx.destination);
+    o.start();
+    ambientNodes.push({osc:o,gain:g});
+  }
+}
+function stopAmbient() {
+  for (const {osc} of ambientNodes) { try{osc.stop()}catch(e){} }
+  ambientNodes = [];
+}
+
+function playSteal() {
+  if (!audioCtx) return;
+  if (audioCtx.state==='suspended') audioCtx.resume();
+  const o=audioCtx.createOscillator(), g=audioCtx.createGain(), f=audioCtx.createBiquadFilter();
+  o.type='sawtooth'; o.frequency.setValueAtTime(90+stolen*28, audioCtx.currentTime);
+  o.frequency.exponentialRampToValueAtTime(40, audioCtx.currentTime+.4);
+  f.type='lowpass'; f.frequency.value=1200-stolen*70;
+  g.gain.setValueAtTime(.3,audioCtx.currentTime);
+  g.gain.exponentialRampToValueAtTime(.001,audioCtx.currentTime+.4);
+  o.connect(f).connect(g).connect(audioCtx.destination);
+  o.start(); o.stop(audioCtx.currentTime+.4);
+}
+
+function playGlitchSound() {
+  if (!audioCtx) return;
+  if (audioCtx.state==='suspended') audioCtx.resume();
+  const o=audioCtx.createOscillator(), g=audioCtx.createGain();
+  o.type='square'; o.frequency.value=200+Math.random()*700;
+  g.gain.setValueAtTime(.1,audioCtx.currentTime);
+  g.gain.exponentialRampToValueAtTime(.001,audioCtx.currentTime+.09);
+  o.connect(g).connect(audioCtx.destination);
+  o.start(); o.stop(audioCtx.currentTime+.09);
+}
+
+// ═══════════════════════════════════════════════
+// GLITCH
+// ═══════════════════════════════════════════════
+function triggerGlitch() {
+  fx.glitchActive = true;
+  fx.glitchTimer  = .35;
+  cam.shake = Math.max(cam.shake, 6);
+  playGlitchSound();
+}
+
+// ═══════════════════════════════════════════════
+// DRAW — Canvas 2D renderer
+// ═══════════════════════════════════════════════
+const VW = () => window.innerWidth;
+const VH = () => window.innerHeight;
+
+// Scale logical 800×600 to viewport
+function getScale() {
+  return Math.min(VW()/CFG.W, VH()/CFG.H);
+}
+function getOffset() {
+  const s = getScale();
+  return { ox:(VW()-CFG.W*s)/2, oy:(VH()-CFG.H*s)/2 };
+}
+
+function draw(t) {
+  const vw = VW(), vh = VH();
+  ctx.clearRect(0, 0, vw, vh);
+
+  const s = getScale();
+  const {ox,oy} = getOffset();
+
+  // Camera shake
+  const sx = cam.sx, sy = cam.sy;
+
+  ctx.save();
+  ctx.translate(ox + sx, oy + sy);
+  ctx.scale(s, s);
+
+  // ── Background
+  ctx.fillStyle = '#07040f';
+  ctx.fillRect(0,0,CFG.W,CFG.H);
+
+  // ── Grid
+  ctx.strokeStyle = 'rgba(42,31,53,0.18)';
+  ctx.lineWidth = 1/s;
+  for (let x=0;x<=CFG.W;x+=40) { ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,CFG.H);ctx.stroke(); }
+  for (let y=0;y<=CFG.H;y+=40) { ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(CFG.W,y);ctx.stroke(); }
+
+  // ── Walls
+  for (const w of WALLS) {
+    ctx.fillStyle='#2f2040';
+    ctx.fillRect(w.x,w.y,w.w,w.h);
+    ctx.fillStyle='#3a2850';
+    ctx.fillRect(w.x+2,w.y+2,w.w-4,w.h-4);
+    ctx.strokeStyle='#604878';
+    ctx.lineWidth=2/s;
+    ctx.strokeRect(w.x,w.y,w.w,w.h);
+  }
+
+  // ── NPCs
+  const idleY = Math.sin(t*1.4)*3;
+  for (const n of npcs) {
+    const iy = n.stolen ? 0 : idleY;
+    if (n.stolen) {
+      // Drained shell
+      ctx.globalAlpha = .3;
+      ctx.fillStyle = '#2a1f35';
+      ctx.shadowBlur = 0;
+      ctx.beginPath(); ctx.arc(n.x, n.y, n.r, 0, Math.PI*2); ctx.fill();
+      ctx.globalAlpha = 1;
+    } else {
+      // Active NPC
+      const isNear = n.id === nearbyId;
+      const pulse  = isNear ? 1 + Math.sin(t*6)*.1 : 1;
+      ctx.save();
+      ctx.shadowColor = n.color;
+      ctx.shadowBlur  = isNear ? 35 : 20;
+      ctx.fillStyle   = n.color;
+      ctx.beginPath();
+      ctx.arc(n.x, n.y+iy, n.r*pulse, 0, Math.PI*2);
+      ctx.fill();
+      // Eyes
+      ctx.shadowBlur=0;
+      ctx.fillStyle='#2a1540';
+      ctx.beginPath(); ctx.arc(n.x-5, n.y-4+iy, 4, 0,Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(n.x+5, n.y-4+iy, 4, 0,Math.PI*2); ctx.fill();
+      // Memory orb above head
+      ctx.shadowColor=n.color; ctx.shadowBlur=15;
+      ctx.fillStyle='#f0e4ff';
+      ctx.beginPath(); ctx.arc(n.x, n.y-n.r-6+iy, 4, 0,Math.PI*2); ctx.fill();
+      ctx.restore();
+    }
+  }
+
+  // ── Particles
+  for (const p of POOL) {
+    if (!p.active) continue;
+    const a = p.life/p.maxLife;
+    ctx.globalAlpha = a;
+    ctx.fillStyle   = p.color;
+    ctx.shadowColor = p.color;
+    ctx.shadowBlur  = 8;
+    ctx.beginPath(); ctx.arc(p.x,p.y,p.size*a,0,Math.PI*2); ctx.fill();
+  }
+  ctx.globalAlpha=1; ctx.shadowBlur=0;
+
+  // ── Player
+  ctx.save();
+  const invertActive = Date.now() < invertUntil;
+  ctx.shadowColor = invertActive ? '#ff8888' : '#c09eff';
+  ctx.shadowBlur  = 30;
+  // Body gradient
+  const pg = ctx.createRadialGradient(player.x-5,player.y-5,0,player.x,player.y,player.r+4);
+  pg.addColorStop(0, invertActive ? '#ffaaaa' : '#f0d5ff');
+  pg.addColorStop(1, invertActive ? '#aa3333' : '#7a45b0');
+  ctx.fillStyle = pg;
+  ctx.beginPath(); ctx.arc(player.x,player.y,player.r,0,Math.PI*2); ctx.fill();
+  // Eyes
+  ctx.shadowBlur=0; ctx.fillStyle='#1a0f2a';
+  ctx.beginPath(); ctx.arc(player.x-5,player.y-4,4,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(player.x+5,player.y-4,4,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle='#c9a0ff';
+  ctx.beginPath(); ctx.arc(player.x-4,player.y-5,2,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(player.x+6,player.y-5,2,0,Math.PI*2); ctx.fill();
+  ctx.restore();
+
+  // ── Vignette (dynamic vision radius)
+  const vg = ctx.createRadialGradient(player.x,player.y,10,player.x,player.y,fx.vigR);
+  vg.addColorStop(0,'rgba(7,4,15,0)');
+  vg.addColorStop(.65,'rgba(7,4,15,.82)');
+  vg.addColorStop(1,'rgba(7,4,15,.97)');
+  ctx.fillStyle=vg;
+  ctx.fillRect(0,0,CFG.W,CFG.H);
+
+  ctx.restore();
+
+  // ── Post-FX overlay (separate canvas)
+  drawPostFX(vw, vh);
+}
+
+// ═══════════════════════════════════════════════
+// POST-FX — scanlines, chromatic, glitch, grain
+// ═══════════════════════════════════════════════
+function drawPostFX(vw, vh) {
+  pfxCtx.clearRect(0,0,vw,vh);
+
+  // Scanlines
+  if (fx.scanlines > .05) {
+    pfxCtx.fillStyle = `rgba(0,0,0,${fx.scanlines*.22})`;
+    for (let y=0;y<vh;y+=3) pfxCtx.fillRect(0,y,vw,1);
+  }
+
+  // Chromatic fringe
+  if (fx.chromatic > .005) {
+    const shift = fx.chromatic * vw * .4 | 0;
+    pfxCtx.save();
+    pfxCtx.globalCompositeOperation='screen';
+    pfxCtx.globalAlpha = fx.chromatic*.28;
+    pfxCtx.fillStyle='#ff0000';
+    pfxCtx.fillRect(-shift,0,vw+shift,vh);
+    pfxCtx.fillStyle='#0000ff';
+    pfxCtx.fillRect(shift,0,vw-shift,vh);
+    pfxCtx.restore();
+  }
+
+  // Glitch bands
+  if (fx.glitchActive) {
+    const bands = 3 + Math.random()*5 | 0;
+    pfxCtx.save();
+    pfxCtx.globalCompositeOperation='overlay';
+    for (let i=0;i<bands;i++) {
+      const y = Math.random()*vh | 0;
+      const h = 1 + Math.random()*4 | 0;
+      const dx = (Math.random()-.5)*28;
+      pfxCtx.globalAlpha = .45+Math.random()*.2;
+      pfxCtx.fillStyle = Math.random()>.5 ? '#ff00cc' : '#00ffee';
+      pfxCtx.fillRect(dx,y,vw,h);
+    }
+    pfxCtx.restore();
+  }
+
+  // Film grain
+  const grain = stolen > 0 ? 8 + stolen*4 : 4;
+  const idata = pfxCtx.createImageData(vw|0, vh|0);
+  const d = idata.data;
+  for (let i=0;i<d.length;i+=4) {
+    const n = (Math.random()-.5)*grain;
+    d[i]=d[i+1]=d[i+2]=n; d[i+3]=28;
+  }
+  pfxCtx.putImageData(idata,0,0);
+}
+
+// ═══════════════════════════════════════════════
+// GAME LOOP — fixed timestep + delta time
+// ═══════════════════════════════════════════════
+const FIXED_STEP = 1/60;
+let accumulator  = 0;
+
+function loop(timestamp) {
+  if (phase==='ending') return;
+  raf = requestAnimationFrame(loop);
+
+  if (lastTime === null) { lastTime = timestamp; return; }
+  let dt = (timestamp - lastTime) / 1000;
+  lastTime = timestamp;
+  if (dt > .1) dt = .1; // spiral-of-death guard
+  elapsed += dt;
+
+  accumulator += dt;
+  while (accumulator >= FIXED_STEP) {
+    update(FIXED_STEP);
+    accumulator -= FIXED_STEP;
+  }
+
+  // Update effects (render-rate ok)
+  if (cam.shake > .01) {
+    cam.sx = (Math.random()*2-1)*cam.shake;
+    cam.sy = (Math.random()*2-1)*cam.shake;
+    cam.shake *= Math.pow(CFG.SHAKE_DECAY, dt*60);
+  } else { cam.shake=0; cam.sx=0; cam.sy=0; }
+
+  if (fx.glitchTimer > 0) {
+    fx.glitchTimer -= dt;
+    if (fx.glitchTimer <= 0) fx.glitchActive = false;
+  }
+  if (fx.chromaticTimer > 0) {
+    fx.chromaticTimer -= dt;
+    if (fx.chromaticTimer <= 0) fx.chromatic *= .5;
+  }
+
+  // Ambient glitch
+  fx.glitchInterval += dt;
+  if (fx.glitchInterval > 3) {
+    fx.glitchInterval = 0;
+    const t = getTier();
+    if (stolen >= 2 && Math.random() < t.glitchP) triggerGlitch();
+  }
+
+  draw(elapsed);
+}
+
+function update(dt) {
+  if (phase !== 'playing') return;
+
+  // ── Player movement
+  let dx=0, dy=0;
+  if (keys.up)    dy -= 1;
+  if (keys.down)  dy += 1;
+  if (keys.left)  dx -= 1;
+  if (keys.right) dx += 1;
+
+  if (dx!==0||dy!==0) {
+    const len = Math.sqrt(dx*dx+dy*dy);
+    let ndx = dx/len*CFG.PLAYER_SPEED*dt;
+    let ndy = dy/len*CFG.PLAYER_SPEED*dt;
+    if (Date.now() < invertUntil) { ndx=-ndx; ndy=-ndy; }
+    moveEntity(player, ndx, ndy);
+  }
+
+  // ── AI
+  updateAI(dt);
+
+  // ── Particles
+  updateParticles(dt);
+
+  // ── Nearby NPC detection
+  const near = findNearest();
+  const newId = near ? near.id : null;
+  if (newId !== nearbyId) {
+    nearbyId = newId;
+    const nh = document.getElementById('near-hint');
+    if (nearbyId) nh.classList.remove('hidden');
+    else          nh.classList.add('hidden');
+  }
+}
+
+// ═══════════════════════════════════════════════
+// INPUT — keyboard
+// ═══════════════════════════════════════════════
+window.addEventListener('keydown', e => {
+  if (e.code==='ArrowUp'   ||e.code==='KeyW') keys.up    = true;
+  if (e.code==='ArrowDown' ||e.code==='KeyS') keys.down  = true;
+  if (e.code==='ArrowLeft' ||e.code==='KeyA') keys.left  = true;
+  if (e.code==='ArrowRight'||e.code==='KeyD') keys.right = true;
+  if (e.code==='KeyE'||e.code==='Space'||e.code==='Enter') {
+    e.preventDefault(); unlockAudio(); trySteal();
+  }
+});
+window.addEventListener('keyup', e => {
+  if (e.code==='ArrowUp'   ||e.code==='KeyW') keys.up    = false;
+  if (e.code==='ArrowDown' ||e.code==='KeyS') keys.down  = false;
+  if (e.code==='ArrowLeft' ||e.code==='KeyA') keys.left  = false;
+  if (e.code==='ArrowRight'||e.code==='KeyD') keys.right = false;
+});
+
+// ── Canvas tap — dismiss dialogue
+gc.addEventListener('pointerdown', () => {
+  unlockAudio();
+  if (phase==='dialogue') { closeDlg(); return; }
+});
+
+// ── Mobile D-pad
+document.querySelectorAll('.dp-btn').forEach(btn => {
+  const k = btn.dataset.k;
+  const press   = e => { e.preventDefault(); keys[k]=true;  btn.classList.add('pressed');    unlockAudio(); };
+  const release = e => { e.preventDefault(); keys[k]=false; btn.classList.remove('pressed'); };
+  btn.addEventListener('touchstart',  press,   {passive:false});
+  btn.addEventListener('touchend',    release);
+  btn.addEventListener('touchcancel', release);
+  btn.addEventListener('mousedown',   press);
+  btn.addEventListener('mouseup',     release);
+  btn.addEventListener('mouseleave',  release);
+});
+
+// ── Mobile Steal button
+const bSteal = document.getElementById('btn-steal');
+bSteal.addEventListener('touchstart', e => { e.preventDefault(); unlockAudio(); trySteal(); }, {passive:false});
+bSteal.addEventListener('mousedown',  () => { unlockAudio(); trySteal(); });
+
+// ── Canvas touch → dismiss dialogue
+gc.addEventListener('touchstart', e => {
+  e.preventDefault();
+  unlockAudio();
+  if (phase==='dialogue') closeDlg();
+}, {passive:false});
+
+// ═══════════════════════════════════════════════
+// START / RESTART
+// ═══════════════════════════════════════════════
+function isMobile() {
+  return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || window.innerWidth < 768;
+}
+
+function startGame() {
+  unlockAudio();
+  // Reset state
+  stolen = 0; nearbyId = null; invertUntil = 0;
+  elapsed = 0; lastTime = null; accumulator = 0;
+  sessionStart = Date.now();
+  Object.assign(cam, {x:400,y:300,sx:0,sy:0,shake:0});
+  Object.assign(fx, {vigR:280,chromatic:0,chromaticTimer:0,scanlines:.08,glitchActive:false,glitchTimer:0,glitchInterval:0});
+  for (const k of Object.keys(keys)) keys[k]=false;
+  for (const p of POOL) p.active=false;
+
+  // Respawn entities
+  player = makePlayer();
+  npcs   = makeNpcs();
+
+  // Show game UI
+  document.getElementById('screen-menu').classList.add('hidden');
+  document.getElementById('screen-end').classList.add('hidden');
+  document.getElementById('dlg').classList.add('hidden');
+  document.getElementById('near-hint').classList.add('hidden');
+  document.getElementById('hud').style.display = 'flex';
+  document.getElementById('mobile-ctrl').style.display = isMobile() ? 'flex' : 'none';
+  updateHUD();
+
+  phase = 'playing';
+  cancelAnimationFrame(raf);
+  lastTime = null;
+  raf = requestAnimationFrame(loop);
+
+  // Restart ambient
+  startAmbient();
+}
+
+document.getElementById('btn-start').addEventListener('click',   startGame);
+document.getElementById('btn-restart').addEventListener('click', startGame);
+gc.addEventListener('contextmenu', e => e.preventDefault());
+
+})();
+</script>
+</body>
+</html>
